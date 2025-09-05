@@ -526,6 +526,7 @@
 
             setupEventListeners() {
                 const fileInput = document.getElementById('fileInput');
+                const triggerButton = document.getElementById('triggerFile');
                 
                 // Add debug logging
                 this.debug('Setting up event listeners...');
@@ -537,7 +538,7 @@
                 }
                 this.debug('File input found successfully');
                 
-                // Multiple event listeners for better mobile compatibility
+                // File input change event
                 fileInput.addEventListener('change', (e) => {
                     this.debug('File input change event fired');
                     this.debug('Files selected: ' + e.target.files.length);
@@ -547,7 +548,31 @@
                     }
                 });
                 
-                // Add focus events for mobile debugging
+                // Trigger button for mobile devices
+                triggerButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.debug('Trigger button clicked - attempting to open file dialog');
+                    
+                    // Create a new file input dynamically
+                    const newInput = document.createElement('input');
+                    newInput.type = 'file';
+                    newInput.accept = '.csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                    newInput.style.display = 'none';
+                    
+                    newInput.addEventListener('change', (e) => {
+                        this.debug('Dynamic file input change event fired');
+                        if (e.target.files.length > 0) {
+                            this.debug('File selected via dynamic input: ' + e.target.files[0].name);
+                            this.handleFileUpload(e);
+                        }
+                        document.body.removeChild(newInput);
+                    });
+                    
+                    document.body.appendChild(newInput);
+                    newInput.click();
+                });
+                
+                // Debug events for the original file input
                 fileInput.addEventListener('focus', () => {
                     this.debug('File input focused');
                 });
