@@ -521,11 +521,7 @@
         let availableCrrts = [];
 
         function handleFileSelect(input) {
-            const file = input.files[0];
-            if (!file) return;
-
-            showStatus('Processing file...', 'info');
-
+        function processFile(file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
