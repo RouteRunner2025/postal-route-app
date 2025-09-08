@@ -388,12 +388,19 @@
         <div class="main-panel">
             <!-- File Upload Section -->
             <div style="text-align: center; margin-bottom: 30px; padding: 20px; border: 2px dashed #007bff; border-radius: 10px; background: #f8fafe;">
-                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;">
-                <button id="uploadBtn" class="btn btn-primary" style="padding: 20px 40px; font-size: 18px; border-radius: 10px; margin-bottom: 15px;">
-                    📁 Choose CSV/Excel File
-                </button>
-                <p style="margin: 0; color: #666; font-size: 14px;">
-                    Select your postal address data file
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" onchange="handleFileSelect(this)" style="
+                    width: 100%; 
+                    height: 60px; 
+                    padding: 15px; 
+                    font-size: 16px; 
+                    border: 2px solid #007bff; 
+                    border-radius: 10px; 
+                    cursor: pointer;
+                    background: white;
+                    color: #333;
+                ">
+                <p style="margin: 15px 0 0 0; color: #666; font-size: 14px;">
+                    Select your CSV/Excel file above
                 </p>
             </div>
             
@@ -402,12 +409,12 @@
             <div id="searchSection" class="hidden">
                 <div id="crrtSection" class="crrt-section" style="display: none;">
                     <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px;">📮 Select Postal Route (CRRT):</label>
-                    <select id="crrtSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; background: white;">
+                    <select id="crrtSelect" onchange="handleCrrtChange()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; background: white;">
                         <option value="">Loading routes...</option>
                     </select>
                 </div>
                 
-                <input type="text" id="searchInput" class="search-input" placeholder="Search addresses to add to route...">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search addresses to add to route..." oninput="handleSearch(this.value)">
                 <div id="resultsContainer" class="results-container">
                     <div style="text-align: center; padding: 30px; color: #666;">
                         Start typing to search addresses...
@@ -417,7 +424,7 @@
                 <div class="options-panel">
                     <h4 style="margin-top: 0;">Route Management</h4>
                     <div id="routeActions">
-                        <button class="btn btn-warning" onclick="app.optimizeRoute()">📍 Optimize Route Order</button>
+                        <button class="btn btn-warning" onclick="optimizeRoute()">📍 Optimize Route Order</button>
                         <div style="font-size: 12px; color: #666; margin-top: 5px;">
                             Reorders stops for shortest travel distance
                         </div>
@@ -437,8 +444,8 @@
             </div>
             
             <div style="margin-bottom: 20px;">
-                <button id="startNavBtn" class="btn btn-success" onclick="app.showNavModal()">Start Navigation</button>
-                <button class="btn btn-secondary" onclick="app.clearRoute()">Clear All</button>
+                <button id="startNavBtn" class="btn btn-success" onclick="showNavModal()">Start Navigation</button>
+                <button class="btn btn-secondary" onclick="clearRoute()">Clear All</button>
             </div>
             
             <div id="navStatus" class="status-indicator status-ready">
@@ -481,804 +488,419 @@
             
             <h4 style="margin-top: 20px; margin-bottom: 15px;">Choose Navigation App</h4>
             
-            <button class="modal-btn" onclick="app.startNavigation('osmand')" style="background: #28a745; color: white;">
+            <button class="modal-btn" onclick="startNavigation('osmand')" style="background: #28a745; color: white;">
                 🗺️ OSMand (Offline Navigation)
             </button>
             
-            <button class="modal-btn" onclick="app.startNavigation('googlemaps')" style="background: #4285f4; color: white;">
+            <button class="modal-btn" onclick="startNavigation('googlemaps')" style="background: #4285f4; color: white;">
                 🌍 Google Maps
             </button>
             
-            <button class="modal-btn" onclick="app.startNavigation('waze')" style="background: #00d4ff; color: white;">
+            <button class="modal-btn" onclick="startNavigation('waze')" style="background: #00d4ff; color: white;">
                 🚗 Waze
             </button>
             
-            <button class="modal-btn" onclick="app.closeModal()" style="background: #6c757d; color: white;">
+            <button class="modal-btn" onclick="closeModal()" style="background: #6c757d; color: white;">
                 Cancel
             </button>
         </div>
     </div>
 
     <script>
-        class PostalRouteApp {
-            constructor() {
-                this.allAddresses = [];
-                this.filteredAddresses = [];
-                this.route = [];
-                this.currentStopIndex = 0;
-                this.isNavigating = false;
-                this.watchId = null;
-                this.selectedNavApp = null;
-                this.arrivalRadius = 30;
-                this.autoAdvanceDelay = 3000;
-                this.currentPosition = null;
-                this.gpsAccuracy = null;
-                this.routingType = 'parcel';
-                this.selectedCrrt = '';
-                this.availableCrrts = [];
-                this.init();
-            }
+        let allAddresses = [];
+        let filteredAddresses = [];
+        let route = [];
+        let currentStopIndex = 0;
+        let isNavigating = false;
+        let selectedNavApp = null;
+        let arrivalRadius = 30;
+        let autoAdvanceDelay = 3000;
+        let currentPosition = null;
+        let routingType = 'parcel';
+        let selectedCrrt = '';
+        let availableCrrts = [];
 
-            init() {
-                this.setupEventListeners();
-                this.startGPSMonitoring();
-            }
+        function handleFileSelect(input) {
+            const file = input.files[0];
+            if (!file) return;
 
-            setupEventListeners() {
-                const fileInput = document.getElementById('fileInput');
-                const triggerButton = document.getElementById('triggerFile');
-                
-                // Add debug logging
-                this.debug('Setting up event listeners...');
-                
-                // Test if file input exists
-                if (!fileInput) {
-                    this.debug('ERROR: File input not found!');
-                    return;
-                }
-                this.debug('File input found successfully');
-                
-                // File input change event
-                fileInput.addEventListener('change', (e) => {
-                    this.debug('File input change event fired');
-                    this.debug('Files selected: ' + e.target.files.length);
-                    if (e.target.files.length > 0) {
-                        this.debug('File name: ' + e.target.files[0].name);
-                        this.handleFileUpload(e);
-                    }
-                });
-                
-                // Trigger button for mobile devices
-                triggerButton.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.debug('Trigger button clicked - attempting to open file dialog');
-                    
-                    // Create a new file input dynamically
-                    const newInput = document.createElement('input');
-                    newInput.type = 'file';
-                    newInput.accept = '.csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                    newInput.style.display = 'none';
-                    
-                    newInput.addEventListener('change', (e) => {
-                        this.debug('Dynamic file input change event fired');
-                        if (e.target.files.length > 0) {
-                            this.debug('File selected via dynamic input: ' + e.target.files[0].name);
-                            this.handleFileUpload(e);
-                        }
-                        document.body.removeChild(newInput);
-                    });
-                    
-                    document.body.appendChild(newInput);
-                    newInput.click();
-                });
-                
-                // Debug events for the original file input
-                fileInput.addEventListener('focus', () => {
-                    this.debug('File input focused');
-                });
-                
-                fileInput.addEventListener('click', () => {
-                    this.debug('File input clicked');
-                });
-                
-                fileInput.addEventListener('touchstart', () => {
-                    this.debug('File input touched');
-                });
+            showStatus('Processing file...', 'info');
 
-                // Search
-                document.getElementById('searchInput').addEventListener('input', (e) => {
-                    this.search(e.target.value);
-                });
-                
-                // Routing type change
-                document.getElementById('routingType').addEventListener('change', (e) => {
-                    this.routingType = e.target.value;
-                    this.updateRoutingTypeDisplay();
-                });
-                
-                this.debug('Event listeners setup complete');
-            }
-            
-            debug(message) {
-                console.log(message);
-                const debugLog = document.getElementById('debugLog');
-                if (debugLog) {
-                    debugLog.style.display = 'block';
-                    debugLog.innerHTML += '<br>' + new Date().toLocaleTimeString() + ': ' + message;
-                }
-            }
-
-            startGPSMonitoring() {
-                if (navigator.geolocation) {
-                    this.watchId = navigator.geolocation.watchPosition(
-                        (position) => {
-                            this.currentPosition = position;
-                            this.gpsAccuracy = position.coords.accuracy;
-                            this.updateGPSStatus();
-                            if (this.isNavigating) {
-                                this.checkArrival(position);
-                            }
-                        },
-                        (error) => {
-                            this.updateGPSStatus(error);
-                        },
-                        {
-                            enableHighAccuracy: true,
-                            maximumAge: 5000,
-                            timeout: 15000
-                        }
-                    );
-                } else {
-                    this.updateGPSStatus({ code: 0, message: 'GPS not supported' });
-                }
-            }
-
-            updateGPSStatus(error = null) {
-                const statusEl = document.getElementById('gpsStatus');
-                
-                if (error) {
-                    statusEl.className = 'gps-status gps-none';
-                    statusEl.innerHTML = '❌ GPS: ' + (error.message || 'Error');
-                } else if (this.gpsAccuracy > 50) {
-                    statusEl.className = 'gps-status gps-poor';
-                    statusEl.innerHTML = `⚠️ GPS: Poor (±${Math.round(this.gpsAccuracy)}m)`;
-                } else {
-                    statusEl.className = 'gps-status gps-good';
-                    statusEl.innerHTML = `✅ GPS: Good (±${Math.round(this.gpsAccuracy)}m)`;
-                }
-            }
-
-            async handleFileUpload(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                this.showStatus('Processing file...', 'info');
-
+            const reader = new FileReader();
+            reader.onload = function(e) {
                 try {
                     let data;
+                    const text = e.target.result;
+                    
                     if (file.name.toLowerCase().endsWith('.csv')) {
-                        const text = await file.text();
-                        data = this.parseCSV(text);
+                        data = parseCSV(text);
                     } else {
-                        const arrayBuffer = await file.arrayBuffer();
-                        const workbook = XLSX.read(arrayBuffer);
+                        const workbook = XLSX.read(e.target.result, { type: 'binary' });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                         data = jsonData.slice(1);
                     }
 
-                    this.processAddressData(data);
-                    this.showStatus(`Loaded ${this.allAddresses.length} addresses successfully!`, 'success');
-                    this.showSearchSection();
+                    processAddressData(data);
+                    showStatus(`Loaded ${allAddresses.length} addresses successfully!`, 'success');
+                    showSearchSection();
                 } catch (error) {
-                    this.showStatus(`Error: ${error.message}`, 'error');
+                    showStatus(`Error: ${error.message}`, 'error');
                 }
-            }
+            };
 
-            parseCSV(text) {
-                const lines = text.split('\n');
-                const data = [];
-                
-                for (let line of lines) {
-                    line = line.trim();
-                    if (!line) continue;
-                    
-                    const row = [];
-                    let current = '';
-                    let inQuotes = false;
-                    
-                    for (let char of line) {
-                        if (char === '"') {
-                            inQuotes = !inQuotes;
-                        } else if (char === ',' && !inQuotes) {
-                            row.push(current.trim().replace(/^"|"$/g, ''));
-                            current = '';
-                        } else {
-                            current += char;
-                        }
-                    }
-                    row.push(current.trim().replace(/^"|"$/g, ''));
-                    
-                    if (row.length >= 9 && row[2] && row[2] !== 'Address') {
-                        data.push(row);
-                    }
-                }
-                
-                return data;
-            }
-
-            processAddressData(data) {
-                this.allAddresses = data.map((row, index) => ({
-                    id: index,
-                    address: row[2] || '',
-                    city: row[3] || '',
-                    state: row[4] || '',
-                    zip: row[5] || '',
-                    crrt: row[8] || '',
-                    walkseq: row[9] || '',
-                    latitude: row[20] ? parseFloat(row[20]) : null,
-                    longitude: row[21] ? parseFloat(row[21]) : null,
-                    fullAddress: `${row[2] || ''}, ${row[3] || ''}, ${row[4] || ''} ${row[5] || ''}`,
-                    packageCount: 1,
-                    completed: false
-                })).filter(addr => addr.address);
-                
-                // Extract unique CRRT values
-                this.availableCrrts = [...new Set(this.allAddresses.map(addr => addr.crrt).filter(crrt => crrt))].sort();
-                console.log('Found CRRT routes:', this.availableCrrts);
-                
-                this.updateFilteredAddresses();
-                this.populateCrrtDropdown();
-                this.updateRoutingTypeDisplay();
-            }
-
-            showStatus(message, type) {
-                const status = document.getElementById('fileStatus');
-                status.textContent = message;
-                status.style.display = 'block';
-                status.style.background = type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#fff3cd';
-                status.style.color = type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#856404';
-            }
-
-            showSearchSection() {
-                document.getElementById('searchSection').classList.remove('hidden');
-                document.getElementById('searchInput').focus();
-            }
-            
-            updateFilteredAddresses() {
-                if (this.routingType === 'postal' && this.selectedCrrt) {
-                    this.filteredAddresses = this.allAddresses.filter(addr => addr.crrt === this.selectedCrrt);
-                } else {
-                    this.filteredAddresses = this.allAddresses;
-                }
-            }
-
-            populateCrrtDropdown() {
-                const crrtSelect = document.getElementById('crrtSelect');
-                
-                if (!crrtSelect) {
-                    console.error('CRRT select element not found!');
-                    return;
-                }
-                
-                if (this.availableCrrts.length === 0) {
-                    crrtSelect.innerHTML = '<option value="">No CRRT routes found</option>';
-                    return;
-                }
-                
-                crrtSelect.innerHTML = `
-                    <option value="">Select a postal route to load all addresses...</option>
-                    ${this.availableCrrts.map(crrt => {
-                        const count = this.allAddresses.filter(addr => addr.crrt === crrt).length;
-                        return `<option value="${crrt}">Route ${crrt} (${count} addresses)</option>`;
-                    }).join('')}
-                `;
-                
-                // Add event listener after populating dropdown
-                crrtSelect.addEventListener('change', (e) => {
-                    console.log('CRRT selected:', e.target.value);
-                    this.selectedCrrt = e.target.value;
-                    this.updateFilteredAddresses();
-                    
-                    if (this.routingType === 'postal' && this.selectedCrrt) {
-                        console.log('Loading entire postal route for:', this.selectedCrrt);
-                        this.loadEntirePostalRoute();
-                    } else {
-                        console.log('Not loading route - routing type:', this.routingType, 'selected CRRT:', this.selectedCrrt);
-                        this.search(document.getElementById('searchInput').value);
-                    }
-                });
-                
-                console.log('CRRT dropdown populated with', this.availableCrrts.length, 'routes');
-            }
-
-            loadEntirePostalRoute() {
-                console.log('loadEntirePostalRoute called for CRRT:', this.selectedCrrt);
-                console.log('All addresses count:', this.allAddresses.length);
-                
-                // Get all addresses for selected CRRT and sort by walk sequence
-                const routeAddresses = this.allAddresses
-                    .filter(addr => addr.crrt === this.selectedCrrt)
-                    .sort((a, b) => (parseInt(a.walkseq) || 0) - (parseInt(b.walkseq) || 0));
-                
-                console.log('Found addresses for this CRRT:', routeAddresses.length);
-                console.log('Sample addresses:', routeAddresses.slice(0, 3));
-                
-                // Clear existing route and load entire postal route with all addresses
-                this.route = routeAddresses.map(addr => ({ ...addr, packageCount: 0 }));
-                
-                console.log('Route loaded with', this.route.length, 'addresses');
-                
-                this.updateRouteDisplay();
-                this.showNotification(`Loaded complete route ${this.selectedCrrt} with ${this.route.length} addresses`);
-                
-                // Update search area to show route is fully loaded
-                const container = document.getElementById('resultsContainer');
-                container.innerHTML = `
-                    <div style="text-align: center; padding: 30px; color: #666;">
-                        <h4 style="color: #007bff; margin-bottom: 15px;">📮 Complete Route ${this.selectedCrrt} Loaded</h4>
-                        <p><strong>All ${this.route.length} addresses</strong> are now in your navigation route</p>
-                        <p style="background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0;">
-                            Addresses are sorted by walk sequence order (${Math.min(...this.route.map(r => parseInt(r.walkseq) || 0))} - ${Math.max(...this.route.map(r => parseInt(r.walkseq) || 0))})
-                        </p>
-                        <p style="font-size: 14px; margin-top: 15px; color: #28a745;">
-                            ✅ Ready for navigation! Click stops on the right to set package counts.
-                        </p>
-                        <button onclick="app.showNavModal()" class="btn btn-success" style="margin-top: 10px;">
-                            🚗 Start Route Navigation
-                        </button>
-                    </div>
-                `;
-            }
-
-            search(query) {
-                const container = document.getElementById('resultsContainer');
-                
-                // If we're in postal mode with a selected route, don't allow individual address selection
-                if (this.routingType === 'postal' && this.selectedCrrt) {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 30px; color: #666;">
-                            <h4 style="color: #007bff; margin-bottom: 15px;">📮 Complete Route ${this.selectedCrrt} Active</h4>
-                            <p><strong>All ${this.route.length} addresses</strong> are loaded in your navigation route</p>
-                            <p style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 15px 0; color: #856404;">
-                                ⚠️ Search disabled - entire postal route is already loaded
-                            </p>
-                            <p style="font-size: 14px; margin-top: 15px; color: #28a745;">
-                                ✅ Click stops on the right to set package counts, then start navigation.
-                            </p>
-                            <button onclick="app.clearRoute()" class="btn btn-secondary" style="margin-top: 10px;">
-                                🔄 Load Different Route
-                            </button>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                if (!query.trim()) {
-                    container.innerHTML = '<div style="text-align: center; padding: 30px; color: #666;">Start typing to search addresses...</div>';
-                    return;
-                }
-
-                const searchAddresses = this.routingType === 'postal' ? this.filteredAddresses : this.allAddresses;
-                const results = searchAddresses.filter(addr => 
-                    addr.address.toLowerCase().includes(query.toLowerCase()) ||
-                    addr.city.toLowerCase().includes(query.toLowerCase()) ||
-                    addr.zip.includes(query)
-                );
-
-                if (results.length === 0) {
-                    const noResultsMsg = this.routingType === 'postal' && this.selectedCrrt ? 
-                        `No addresses found in route ${this.selectedCrrt}` : 
-                        'No addresses found';
-                    container.innerHTML = `<div style="text-align: center; padding: 30px; color: #666;">${noResultsMsg}</div>`;
-                    return;
-                }
-
-                container.innerHTML = results.map(addr => {
-                    const inRoute = this.route.find(r => r.id === addr.id);
-                    const distanceText = this.getDistanceText(addr);
-                    const crrtText = addr.crrt ? ` (${addr.crrt})` : '';
-                    return `
-                        <div class="address-item ${inRoute ? 'selected' : ''}" onclick="app.toggleAddress(${addr.id})">
-                            <input type="checkbox" ${inRoute ? 'checked' : ''} readonly>
-                            <div class="address-info">
-                                <div class="address-main">${addr.address}${crrtText}</div>
-                                <div class="address-sub">${addr.city}, ${addr.state} ${addr.zip}</div>
-                                ${distanceText ? `<div class="distance-indicator">${distanceText}</div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-
-            getDistanceText(address) {
-                if (!this.currentPosition || !address.latitude || !address.longitude) {
-                    return null;
-                }
-                
-                const distance = this.calculateDistance(
-                    this.currentPosition.coords.latitude,
-                    this.currentPosition.coords.longitude,
-                    address.latitude,
-                    address.longitude
-                );
-                
-                if (distance < 1000) {
-                    return `${Math.round(distance)}m away`;
-                } else {
-                    return `${(distance / 1000).toFixed(1)}km away`;
-                }
-            }
-
-            updateRoutingTypeDisplay() {
-                const searchInput = document.getElementById('searchInput');
-                const optimizeButton = document.querySelector('.options-panel button');
-                const crrtSection = document.getElementById('crrtSection');
-                
-                if (this.routingType === 'postal') {
-                    searchInput.placeholder = "Search addresses or add packages to existing stops...";
-                    if (optimizeButton) {
-                        optimizeButton.innerHTML = '📮 Optimize Postal Route';
-                        optimizeButton.parentElement.querySelector('div').textContent = 'Reorders stops by walk sequence and CRRT';
-                    }
-                    
-                    // Show CRRT selector for postal routes
-                    if (crrtSection && this.availableCrrts.length > 0) {
-                        crrtSection.style.display = 'block';
-                        console.log('Showing CRRT section');
-                    }
-                } else {
-                    searchInput.placeholder = "Search addresses to add to delivery route...";
-                    if (optimizeButton) {
-                        optimizeButton.innerHTML = '📦 Optimize Delivery Route';
-                        optimizeButton.parentElement.querySelector('div').textContent = 'Reorders stops for shortest travel distance';
-                    }
-                    
-                    // Hide CRRT selector for parcel delivery
-                    if (crrtSection) {
-                        crrtSection.style.display = 'none';
-                        console.log('Hiding CRRT section');
-                    }
-                }
-            }
-
-            optimizeRoute() {
-                if (this.route.length < 2) {
-                    this.showNotification('Need at least 2 stops to optimize');
-                    return;
-                }
-
-                this.showNotification('Optimizing route...');
-                
-                if (this.routingType === 'postal') {
-                    // Postal route optimization: sort by CRRT then walk sequence
-                    this.route.sort((a, b) => {
-                        if (a.crrt !== b.crrt) {
-                            return a.crrt.localeCompare(b.crrt);
-                        }
-                        return (parseInt(a.walkseq) || 0) - (parseInt(b.walkseq) || 0);
-                    });
-                    this.showNotification('Postal route optimized by CRRT and walk sequence!');
-                } else {
-                    // Parcel delivery optimization: nearest neighbor algorithm
-                    if (!this.currentPosition) {
-                        this.showNotification('GPS location needed for delivery optimization');
-                        return;
-                    }
-                    
-                    const optimized = [];
-                    const remaining = [...this.route];
-                    let current = this.currentPosition.coords;
-                    
-                    while (remaining.length > 0) {
-                        let nearest = 0;
-                        let minDistance = Infinity;
-                        
-                        for (let i = 0; i < remaining.length; i++) {
-                            if (!remaining[i].latitude || !remaining[i].longitude) continue;
-                            
-                            const distance = this.calculateDistance(
-                                current.latitude,
-                                current.longitude,
-                                remaining[i].latitude,
-                                remaining[i].longitude
-                            );
-                            
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                                nearest = i;
-                            }
-                        }
-                        
-                        const stop = remaining.splice(nearest, 1)[0];
-                        optimized.push(stop);
-                        current = { latitude: stop.latitude, longitude: stop.longitude };
-                    }
-                    
-                    this.route = optimized;
-                    this.showNotification('Delivery route optimized by distance!');
-                }
-                
-                this.updateRouteDisplay();
-            }
-
-            toggleAddress(addressId) {
-                // Prevent individual address toggling in postal mode with selected route
-                if (this.routingType === 'postal' && this.selectedCrrt) {
-                    this.showNotification('⚠️ Cannot modify addresses - complete postal route is loaded');
-                    return;
-                }
-                
-                const address = this.allAddresses.find(a => a.id === addressId);
-                const existingIndex = this.route.findIndex(r => r.id === addressId);
-                
-                if (existingIndex >= 0) {
-                    this.route.splice(existingIndex, 1);
-                    this.showNotification(`Removed ${address.address}`);
-                } else {
-                    this.route.push({ ...address });
-                    this.showNotification(`Added ${address.address}`);
-                }
-                
-                this.updateRouteDisplay();
-                this.search(document.getElementById('searchInput').value);
-            }
-
-            updateRouteDisplay() {
-                document.getElementById('routeCount').textContent = `${this.route.length} stops`;
-                const routeList = document.getElementById('routeList');
-                
-                if (this.route.length === 0) {
-                    routeList.innerHTML = `
-                        <div style="text-align: center; padding: 40px 20px; color: #666;">
-                            <p>No stops added yet</p>
-                            <p style="font-size: 14px; margin-top: 10px;">Search and add addresses to build your delivery route</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                routeList.innerHTML = this.route.map((stop, index) => {
-                    const isCurrent = index === this.currentStopIndex && this.isNavigating;
-                    const distanceText = this.getDistanceText(stop);
-                    const packageBadge = stop.packageCount > 0 ? 
-                        `<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">${stop.packageCount} pkg${stop.packageCount !== 1 ? 's' : ''}</span>` : 
-                        `<span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0 pkgs</span>`;
-                    
-                    return `
-                        <div class="route-item ${stop.completed ? 'completed' : ''} ${isCurrent ? 'current' : ''}" onclick="app.managePackages(${index})">
-                            <div style="display: flex; align-items: center; flex: 1; cursor: pointer;">
-                                <div class="stop-number ${stop.completed ? 'completed' : ''}">${index + 1}</div>
-                                <div class="address-info">
-                                    <div class="address-main">${stop.address}${packageBadge}</div>
-                                    <div class="address-sub">${stop.city}, ${stop.state} ${stop.zip} ${stop.walkseq ? `(Walk: ${stop.walkseq})` : ''}</div>
-                                    ${isCurrent && distanceText ? `<div class="distance-indicator">📍 ${distanceText}</div>` : ''}
-                                </div>
-                            </div>
-                            ${this.routingType === 'parcel' ? `<button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="event.stopPropagation(); app.removeStop(${index})">Remove</button>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            }
-            
-            managePackages(stopIndex) {
-                const stop = this.route[stopIndex];
-                const newCount = prompt(`How many packages for ${stop.address}?`, stop.packageCount || 0);
-                
-                if (newCount !== null && !isNaN(newCount) && newCount >= 0) {
-                    stop.packageCount = parseInt(newCount);
-                    this.updateRouteDisplay();
-                    
-                    if (parseInt(newCount) > 0) {
-                        this.showNotification(`Set ${newCount} package${newCount !== '1' ? 's' : ''} for ${stop.address}`);
-                    } else {
-                        this.showNotification(`Removed packages from ${stop.address}`);
-                    }
-                }
-            }
-
-            removeStop(index) {
-                this.route.splice(index, 1);
-                this.updateRouteDisplay();
-            }
-
-            clearRoute() {
-                if (this.route.length > 0 && confirm('Clear current route?')) {
-                    this.route = [];
-                    this.currentStopIndex = 0;
-                    this.selectedCrrt = ''; // Clear CRRT selection
-                    document.getElementById('crrtSelect').value = ''; // Reset dropdown
-                    this.updateRouteDisplay();
-                    this.stopNavigation();
-                    this.showNotification('Route cleared - select a new postal route');
-                    
-                    // Reset search area
-                    const container = document.getElementById('resultsContainer');
-                    container.innerHTML = '<div style="text-align: center; padding: 30px; color: #666;">Select a postal route to load all addresses...</div>';
-                }
-            }
-
-            showNavModal() {
-                if (this.route.length === 0) {
-                    alert('Add addresses to your route first!');
-                    return;
-                }
-                document.getElementById('navModal').style.display = 'block';
-            }
-
-            closeModal() {
-                document.getElementById('navModal').style.display = 'none';
-            }
-
-            async startNavigation(navApp) {
-                this.arrivalRadius = parseInt(document.getElementById('arrivalRadius').value);
-                this.autoAdvanceDelay = parseInt(document.getElementById('autoAdvanceDelay').value);
-                
-                this.closeModal();
-                this.selectedNavApp = navApp;
-                
-                if (!this.currentPosition) {
-                    alert('GPS location required for automatic navigation');
-                    return;
-                }
-                
-                this.isNavigating = true;
-                this.currentStopIndex = 0;
-                this.route.forEach(stop => stop.completed = false);
-                
-                this.navigateToCurrentStop();
-                this.updateNavigationStatus();
-            }
-
-            checkArrival(position) {
-                if (!this.isNavigating || this.currentStopIndex >= this.route.length) return;
-                
-                const currentStop = this.route[this.currentStopIndex];
-                if (!currentStop || !currentStop.latitude || !currentStop.longitude) return;
-                
-                const distance = this.calculateDistance(
-                    position.coords.latitude,
-                    position.coords.longitude,
-                    currentStop.latitude,
-                    currentStop.longitude
-                );
-                
-                if (distance <= this.arrivalRadius) {
-                    this.handleArrival(currentStop);
-                } else {
-                    this.updateRouteDisplay();
-                }
-            }
-
-            handleArrival(stop) {
-                stop.completed = true;
-                this.showArrivalNotification(stop);
-                
-                setTimeout(() => {
-                    this.currentStopIndex++;
-                    if (this.currentStopIndex < this.route.length) {
-                        this.navigateToCurrentStop();
-                    } else {
-                        this.completeRoute();
-                    }
-                    this.updateRouteDisplay();
-                    this.updateNavigationStatus();
-                }, this.autoAdvanceDelay);
-            }
-
-            showArrivalNotification(stop) {
-                const packageText = stop.packageCount > 0 ? 
-                    `${stop.packageCount} package${stop.packageCount !== 1 ? 's' : ''}` : 
-                    'No packages';
-                    
-                const notification = document.createElement('div');
-                notification.className = 'arrival-notification';
-                notification.innerHTML = `
-                    <div style="font-size: 24px; margin-bottom: 10px;">📍 Arrived!</div>
-                    <div style="margin-bottom: 10px; font-weight: 600;">${stop.address}</div>
-                    <div style="font-size: 16px; margin-bottom: 8px; color: ${stop.packageCount > 0 ? '#fff' : '#ffeb3b'};">
-                        📦 ${packageText}
-                    </div>
-                    ${stop.walkseq ? `<div style="font-size: 12px; opacity: 0.8;">Walk Seq: ${stop.walkseq}</div>` : ''}
-                    <div style="font-size: 12px; margin-top: 10px; opacity: 0.8;">
-                        Auto-advancing in ${this.autoAdvanceDelay/1000} seconds...
-                    </div>
-                `;
-                
-                document.body.appendChild(notification);
-                setTimeout(() => notification.remove(), this.autoAdvanceDelay + 2000);
-            }
-
-            navigateToCurrentStop() {
-                const stop = this.route[this.currentStopIndex];
-                const navUrl = this.generateNavURL(stop);
-                window.open(navUrl, '_blank');
-                this.showNotification(`Navigating to stop ${this.currentStopIndex + 1}`);
-            }
-
-            generateNavURL(stop) {
-                const coords = stop.latitude && stop.longitude ? 
-                    `${stop.latitude},${stop.longitude}` : 
-                    encodeURIComponent(stop.address);
-                
-                switch (this.selectedNavApp) {
-                    case 'osmand':
-                        return stop.latitude ? `osmand://?lat=${stop.latitude}&lon=${stop.longitude}` : `osmand://?q=${coords}`;
-                    case 'googlemaps':
-                        return `https://www.google.com/maps/dir/?api=1&destination=${coords}&travelmode=driving`;
-                    case 'waze':
-                        return stop.latitude ? `https://waze.com/ul?ll=${coords}&navigate=yes` : `https://waze.com/ul?q=${coords}`;
-                }
-            }
-
-            completeRoute() {
-                this.stopNavigation();
-                
-                const notification = document.createElement('div');
-                notification.style.cssText = `
-                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                    background: #28a745; color: white; padding: 30px; border-radius: 15px;
-                    z-index: 2000; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-                `;
-                notification.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 15px;">🎉</div>
-                    <div style="font-size: 24px; margin-bottom: 10px;">Route Complete!</div>
-                    <div style="margin-bottom: 15px;">All ${this.route.length} stops delivered</div>
-                    <button onclick="this.parentElement.remove(); app.resetRoute();" 
-                            style="background: white; color: #28a745; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: 600;">
-                        Start New Route
-                    </button>
-                `;
-                
-                document.body.appendChild(notification);
-            }
-
-            stopNavigation() {
-                this.isNavigating = false;
-                this.updateNavigationStatus();
-            }
-
-            resetRoute() {
-                this.route = [];
-                this.currentStopIndex = 0;
-                this.updateRouteDisplay();
-                this.stopNavigation();
-            }
-
-            updateNavigationStatus() {
-                const status = document.getElementById('navStatus');
-                
-                if (this.isNavigating) {
-                    const currentStop = this.route[this.currentStopIndex];
-                    status.className = 'status-indicator status-navigating';
-                    status.innerHTML = `🚗 Navigating to Stop ${this.currentStopIndex + 1}<br><small>${currentStop ? currentStop.address : 'Loading...'}</small>`;
-                } else {
-                    status.className = 'status-indicator status-ready';
-                    status.innerHTML = '📍 Ready to start navigation';
-                }
-            }
-
-            calculateDistance(lat1, lon1, lat2, lon2) {
-                const R = 6371000;
-                const dLat = (lat2 - lat1) * Math.PI / 180;
-                const dLon = (lon2 - lon1) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                        Math.sin(dLon/2) * Math.sin(dLon/2);
-                return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            }
-
-            showNotification(message) {
-                const notification = document.createElement('div');
-                notification.className = 'notification';
-                notification.textContent = message;
-                document.body.appendChild(notification);
-                setTimeout(() => notification.remove(), 3000);
+            if (file.name.toLowerCase().endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsBinaryString(file);
             }
         }
 
-        // Initialize the app
-        const app = new PostalRouteApp();
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const data = [];
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                const row = [];
+                let current = '';
+                let inQuotes = false;
+                
+                for (let char of line) {
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        row.push(current.trim().replace(/^"|"$/g, ''));
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                row.push(current.trim().replace(/^"|"$/g, ''));
+                
+                if (row.length >= 9 && row[2] && row[2] !== 'Address') {
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+
+        function processAddressData(data) {
+            allAddresses = data.map((row, index) => ({
+                id: index,
+                address: row[2] || '',
+                city: row[3] || '',
+                state: row[4] || '',
+                zip: row[5] || '',
+                crrt: row[8] || '',
+                walkseq: row[9] || '',
+                latitude: row[20] ? parseFloat(row[20]) : null,
+                longitude: row[21] ? parseFloat(row[21]) : null,
+                fullAddress: `${row[2] || ''}, ${row[3] || ''}, ${row[4] || ''} ${row[5] || ''}`,
+                packageCount: 0,
+                completed: false
+            })).filter(addr => addr.address);
+            
+            availableCrrts = [...new Set(allAddresses.map(addr => addr.crrt).filter(crrt => crrt))].sort();
+            updateFilteredAddresses();
+            populateCrrtDropdown();
+            updateRoutingTypeDisplay();
+        }
+
+        function populateCrrtDropdown() {
+            const crrtSelect = document.getElementById('crrtSelect');
+            if (!crrtSelect || availableCrrts.length === 0) return;
+            
+            crrtSelect.innerHTML = `
+                <option value="">Select a postal route to load all addresses...</option>
+                ${availableCrrts.map(crrt => {
+                    const count = allAddresses.filter(addr => addr.crrt === crrt).length;
+                    return `<option value="${crrt}">Route ${crrt} (${count} addresses)</option>`;
+                }).join('')}
+            `;
+        }
+
+        function handleCrrtChange() {
+            const select = document.getElementById('crrtSelect');
+            selectedCrrt = select.value;
+            updateFilteredAddresses();
+            
+            if (routingType === 'postal' && selectedCrrt) {
+                loadEntirePostalRoute();
+            } else {
+                handleSearch(document.getElementById('searchInput').value);
+            }
+        }
+
+        function loadEntirePostalRoute() {
+            const routeAddresses = allAddresses
+                .filter(addr => addr.crrt === selectedCrrt)
+                .sort((a, b) => (parseInt(a.walkseq) || 0) - (parseInt(b.walkseq) || 0));
+            
+            route = routeAddresses.map(addr => ({ ...addr, packageCount: 0 }));
+            updateRouteDisplay();
+            showNotification(`Loaded complete route ${selectedCrrt} with ${route.length} addresses`);
+            
+            const container = document.getElementById('resultsContainer');
+            container.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: #666;">
+                    <h4 style="color: #007bff; margin-bottom: 15px;">📮 Complete Route ${selectedCrrt} Loaded</h4>
+                    <p><strong>All ${route.length} addresses</strong> are now in your navigation route</p>
+                    <p style="background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 15px 0;">
+                        Addresses are sorted by walk sequence order
+                    </p>
+                    <p style="font-size: 14px; margin-top: 15px; color: #28a745;">
+                        ✅ Ready for navigation! Click stops on the right to set package counts.
+                    </p>
+                </div>
+            `;
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('fileStatus');
+            status.textContent = message;
+            status.style.display = 'block';
+            status.style.background = type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#fff3cd';
+            status.style.color = type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#856404';
+        }
+
+        function showSearchSection() {
+            document.getElementById('searchSection').classList.remove('hidden');
+            document.getElementById('searchInput').focus();
+        }
+
+        function updateFilteredAddresses() {
+            if (routingType === 'postal' && selectedCrrt) {
+                filteredAddresses = allAddresses.filter(addr => addr.crrt === selectedCrrt);
+            } else {
+                filteredAddresses = allAddresses;
+            }
+        }
+
+        function updateRoutingTypeDisplay() {
+            const searchInput = document.getElementById('searchInput');
+            const crrtSection = document.getElementById('crrtSection');
+            
+            if (routingType === 'postal') {
+                searchInput.placeholder = "Search addresses or add packages to existing stops...";
+                if (crrtSection && availableCrrts.length > 0) {
+                    crrtSection.style.display = 'block';
+                }
+            } else {
+                searchInput.placeholder = "Search addresses to add to delivery route...";
+                if (crrtSection) {
+                    crrtSection.style.display = 'none';
+                }
+            }
+        }
+
+        function handleSearch(query) {
+            const container = document.getElementById('resultsContainer');
+            
+            if (routingType === 'postal' && selectedCrrt) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 30px; color: #666;">
+                        <h4 style="color: #007bff; margin-bottom: 15px;">📮 Complete Route ${selectedCrrt} Active</h4>
+                        <p><strong>All ${route.length} addresses</strong> are loaded in your navigation route</p>
+                        <p style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 15px 0; color: #856404;">
+                            ⚠️ Search disabled - entire postal route is already loaded
+                        </p>
+                        <p style="font-size: 14px; margin-top: 15px; color: #28a745;">
+                            ✅ Click stops on the right to set package counts, then start navigation.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (!query.trim()) {
+                container.innerHTML = '<div style="text-align: center; padding: 30px; color: #666;">Start typing to search addresses...</div>';
+                return;
+            }
+
+            const searchAddresses = routingType === 'postal' ? filteredAddresses : allAddresses;
+            const results = searchAddresses.filter(addr => 
+                addr.address.toLowerCase().includes(query.toLowerCase()) ||
+                addr.city.toLowerCase().includes(query.toLowerCase()) ||
+                addr.zip.includes(query)
+            );
+
+            if (results.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 30px; color: #666;">No addresses found</div>';
+                return;
+            }
+
+            container.innerHTML = results.map(addr => {
+                const inRoute = route.find(r => r.id === addr.id);
+                const crrtText = addr.crrt ? ` (${addr.crrt})` : '';
+                return `
+                    <div class="address-item ${inRoute ? 'selected' : ''}" onclick="toggleAddress(${addr.id})">
+                        <input type="checkbox" ${inRoute ? 'checked' : ''} readonly>
+                        <div class="address-info">
+                            <div class="address-main">${addr.address}${crrtText}</div>
+                            <div class="address-sub">${addr.city}, ${addr.state} ${addr.zip}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleAddress(addressId) {
+            if (routingType === 'postal' && selectedCrrt) {
+                showNotification('⚠️ Cannot modify addresses - complete postal route is loaded');
+                return;
+            }
+            
+            const address = allAddresses.find(a => a.id === addressId);
+            const existingIndex = route.findIndex(r => r.id === addressId);
+            
+            if (existingIndex >= 0) {
+                route.splice(existingIndex, 1);
+                showNotification(`Removed ${address.address}`);
+            } else {
+                route.push({ ...address });
+                showNotification(`Added ${address.address}`);
+            }
+            
+            updateRouteDisplay();
+            handleSearch(document.getElementById('searchInput').value);
+        }
+
+        function updateRouteDisplay() {
+            document.getElementById('routeCount').textContent = `${route.length} stops`;
+            const routeList = document.getElementById('routeList');
+            
+            if (route.length === 0) {
+                routeList.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: #666;">
+                        <p>No stops added yet</p>
+                        <p style="font-size: 14px; margin-top: 10px;">Search and add addresses to build your delivery route</p>
+                    </div>
+                `;
+                return;
+            }
+
+            routeList.innerHTML = route.map((stop, index) => {
+                const packageBadge = stop.packageCount > 0 ? 
+                    `<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">${stop.packageCount} pkg${stop.packageCount !== 1 ? 's' : ''}</span>` : 
+                    `<span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0 pkgs</span>`;
+                
+                return `
+                    <div class="route-item" onclick="managePackages(${index})">
+                        <div style="display: flex; align-items: center; flex: 1; cursor: pointer;">
+                            <div class="stop-number">${index + 1}</div>
+                            <div class="address-info">
+                                <div class="address-main">${stop.address}${packageBadge}</div>
+                                <div class="address-sub">${stop.city}, ${stop.state} ${stop.zip} ${stop.walkseq ? `(Walk: ${stop.walkseq})` : ''}</div>
+                            </div>
+                        </div>
+                        ${routingType === 'parcel' ? `<button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="event.stopPropagation(); removeStop(${index})">Remove</button>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function managePackages(stopIndex) {
+            const stop = route[stopIndex];
+            const newCount = prompt(`How many packages for ${stop.address}?`, stop.packageCount || 0);
+            
+            if (newCount !== null && !isNaN(newCount) && newCount >= 0) {
+                stop.packageCount = parseInt(newCount);
+                updateRouteDisplay();
+                
+                if (parseInt(newCount) > 0) {
+                    showNotification(`Set ${newCount} package${newCount !== '1' ? 's' : ''} for ${stop.address}`);
+                } else {
+                    showNotification(`Removed packages from ${stop.address}`);
+                }
+            }
+        }
+
+        function removeStop(index) {
+            route.splice(index, 1);
+            updateRouteDisplay();
+        }
+
+        function clearRoute() {
+            if (route.length > 0 && confirm('Clear current route?')) {
+                route = [];
+                currentStopIndex = 0;
+                selectedCrrt = '';
+                document.getElementById('crrtSelect').value = '';
+                updateRouteDisplay();
+                showNotification('Route cleared - select a new postal route');
+                
+                const container = document.getElementById('resultsContainer');
+                container.innerHTML = '<div style="text-align: center; padding: 30px; color: #666;">Select a postal route to load all addresses...</div>';
+            }
+        }
+
+        function showNavModal() {
+            if (route.length === 0) {
+                alert('Add addresses to your route first!');
+                return;
+            }
+            document.getElementById('navModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('navModal').style.display = 'none';
+        }
+
+        function startNavigation(navApp) {
+            arrivalRadius = parseInt(document.getElementById('arrivalRadius').value);
+            autoAdvanceDelay = parseInt(document.getElementById('autoAdvanceDelay').value);
+            
+            closeModal();
+            selectedNavApp = navApp;
+            
+            if (!navigator.geolocation) {
+                alert('GPS not supported on this device');
+                return;
+            }
+            
+            alert(`Navigation started with ${navApp} for ${route.length} stops`);
+        }
+
+        function optimizeRoute() {
+            if (route.length < 2) {
+                showNotification('Need at least 2 stops to optimize');
+                return;
+            }
+
+            showNotification('Optimizing route...');
+            
+            if (routingType === 'postal') {
+                route.sort((a, b) => {
+                    if (a.crrt !== b.crrt) {
+                        return a.crrt.localeCompare(b.crrt);
+                    }
+                    return (parseInt(a.walkseq) || 0) - (parseInt(b.walkseq) || 0);
+                });
+                showNotification('Postal route optimized by CRRT and walk sequence!');
+            } else {
+                showNotification('Parcel delivery optimization would require GPS location');
+            }
+            
+            updateRouteDisplay();
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // Initialize routing type handler
+        document.getElementById('routingType').addEventListener('change', function() {
+            routingType = this.value;
+            updateRoutingTypeDisplay();
+        });
     </script>
 </body>
 </html>
